@@ -7,6 +7,7 @@
                  [pro.juxt.crux/crux-core "1.18.0"] ;; added these
                  [pro.juxt.crux/crux-rocksdb "1.18.0"]
                  [pro.juxt.crux/crux-lucene "1.18.0"]
+                 [pro.juxt.crux/crux-metrics "1.18.0"]
                  [pro.juxt.crux/crux-http-server "1.18.0"]] ;; but otherwise is vanilla "lein new app myproject"
   :main ^:skip-aot myproject.core
   :target-path "target/%s"

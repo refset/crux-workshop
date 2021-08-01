@@ -11,7 +11,10 @@
                                                     :db-dir "data/doc-store"}}
                    :crux/index-store {:kv-store {:crux/module 'crux.rocksdb/->kv-store,
                                                  :db-dir "data/indices"}}
-                   :crux.http-server/server {}}
+                   :crux.lucene/lucene-store {:db-dir "data/lucene"}
+                   :crux.http-server/server {:server-label "refset/crux-workshop"}
+                   :crux.metrics/status-reporter {}
+}
         node (doto (c/start-node node-opts) (c/sync))
         submit-data? (nil? (c/entity (c/db node) :bar))]
     (when (not submit-data?) (prn "Resuming node"))
@@ -183,7 +186,8 @@
 
   ;; helpers
   (defn q [m & [vt tt]]
-    (c/q (c/db mynode vt tt) (merge {:limit 10} m)))
+    (time
+     (c/q (c/db mynode vt tt) (merge {:limit 10} m))))
 
   (defn e [eid & [vt tt]]
     (c/entity (c/db mynode vt tt) eid))
@@ -198,6 +202,26 @@
   (q '{:find [?e ?t]
       :where [[?e :tmdb.movie/title ?t]]
       })
+
+  (count (q '{:find [?e ?t]
+              :limit 100000
+              :where [[(wildcard-text-search "Alien Aliens") [[?e ?t]]]]
+              }))
+
+  (defn ss [db s]
+    (->> (iterator-seq s)
+         (map (fn doc->rel [[^org.apache.lucene.document.Document doc score]]
+                [(.get ^org.apache.lucene.document.Document doc crux.lucene/field-crux-attr) (.get ^org.apache.lucene.document.Document doc crux.lucene/field-crux-val) score]))
+            (distinct) ;; rely on the later resolve step to find all the entities sharing a given AV
+            (mapcat (fn resolve-atemporal-av [[a v s]]
+                      (c/q db {:find '[e a v s]
+                               :in '[a v s]
+                               :where [['e (keyword a) 'v]]}
+                           (keyword a) v s)))))
+  (time (with-open [s (crux.lucene/search mynode "Alien Aliens")]
+          (with-open [db (c/open-db mynode)]
+            (count (into [] (take 1000000 (ss db s)))))
+          ))
 
   (e :tmdb/movie-10027)
 
